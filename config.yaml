@@ -7,7 +7,7 @@ scraper:
   timeout_seconds: 30
 
 alerts:
-  default_threshold_pct: 7
+  default_threshold_pct: 5
   comparison_days: 7
 
 products:

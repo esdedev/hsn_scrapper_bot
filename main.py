@@ -42,6 +42,7 @@ def run():
     products = config["products"]
     now = datetime.now(timezone.utc)
     all_alerts = []
+    all_prices = {}  # {product_name: [price_entries]}
 
     for product in products:
         name = product["name"]
@@ -55,6 +56,8 @@ def run():
             logger.warning(f"No prices found for {name}")
             continue
 
+        all_prices[name] = price_data
+
         for entry in price_data:
             insert_price(
                 conn,
@@ -65,11 +68,20 @@ def run():
                 entry.get("discount_pct"),
                 now,
             )
-            logger.info(f"  {entry['variant']}: {entry['price']}€")
 
         alerts = check_alerts(conn, product_id, name, price_data, threshold, comparison_days)
         all_alerts.extend(alerts)
 
+    # Always send a price summary
+    if all_prices and bot_token and chat_id:
+        summary = _build_summary(all_prices, now)
+        try:
+            send_telegram_message(bot_token, chat_id, summary)
+            logger.info("Summary sent to Telegram")
+        except Exception as e:
+            logger.error(f"Failed to send summary: {e}")
+
+    # Send individual alerts for price drops
     if all_alerts and bot_token and chat_id:
         for alert in all_alerts:
             msg = format_alert_message(alert)
@@ -78,13 +90,25 @@ def run():
                 send_telegram_message(bot_token, chat_id, msg)
             except Exception as e:
                 logger.error(f"Failed to send Telegram alert: {e}")
-    elif all_alerts:
-        logger.warning("Alerts detected but Telegram not configured")
-        for alert in all_alerts:
-            logger.info(format_alert_message(alert))
 
-    logger.info(f"Done. {len(all_alerts)} alerts sent.")
+    logger.info(f"Done. {len(all_prices)} products scraped, {len(all_alerts)} alerts sent.")
     conn.close()
+
+
+def _build_summary(all_prices: dict, now: datetime) -> str:
+    ts = now.strftime("%d/%m/%Y %H:%M UTC")
+    lines = [f"Precios HSN ({ts})\n"]
+    for name, entries in all_prices.items():
+        lines.append(name)
+        for e in entries:
+            line = f"  {e['variant']}: {e['price']:.2f} EUR"
+            if e.get("original_price"):
+                line += f" (PVPR {e['original_price']:.2f} EUR)"
+            if e.get("discount_pct"):
+                line += f" -{e['discount_pct']:.0f}%"
+            lines.append(line)
+        lines.append("")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
