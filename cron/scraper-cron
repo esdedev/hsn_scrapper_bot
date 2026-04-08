@@ -1,0 +1,1 @@
+0 */6 * * * cd /app && python main.py >> /var/log/scraper.log 2>&1

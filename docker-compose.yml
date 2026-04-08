@@ -1,0 +1,25 @@
+services:
+  bot:
+    build: .
+    command: python src/bot.py
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+
+  scraper:
+    build: .
+    command: >
+      bash -c "
+        cp /app/cron/scraper-cron /etc/cron.d/scraper-cron &&
+        chmod 0644 /etc/cron.d/scraper-cron &&
+        crontab /etc/cron.d/scraper-cron &&
+        echo 'Cron started. Running initial scrape...' &&
+        python main.py &&
+        cron -f
+      "
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
+      - ./cron:/app/cron:ro
+    restart: unless-stopped
