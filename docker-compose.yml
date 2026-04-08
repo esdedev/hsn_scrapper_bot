@@ -12,6 +12,7 @@ services:
     build: .
     command: >
       bash -c "
+        env | grep -E '^(TELEGRAM_|PATH=|HOME=|LANG=)' | sed 's/=\(.*\)/=\"\1\"/' > /etc/environment &&
         cp /app/cron/scraper-cron /etc/cron.d/scraper-cron &&
         chmod 0644 /etc/cron.d/scraper-cron &&
         crontab /etc/cron.d/scraper-cron &&

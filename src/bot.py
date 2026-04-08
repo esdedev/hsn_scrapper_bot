@@ -34,19 +34,19 @@ async def cmd_precios(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     for p in products:
         latest = get_latest_prices(conn, p["id"])
         if not latest:
-            lines.append(f"*{p['name']}*\nSin datos aun\n")
+            lines.append(f"<b>{p['name']}</b>\nSin datos aun\n")
             continue
-        lines.append(f"*{p['name']}*")
+        lines.append(f"<b>{p['name']}</b>")
         for v in latest:
-            line = f"  {v['variant']}: {v['price']:.2f} EUR"
+            line = f"  {v['variant']}: <b>{v['price']:.2f} EUR</b>"
             if v["original_price"]:
-                line += f" (antes {v['original_price']:.2f} EUR)"
+                line += f" (<s>{v['original_price']:.2f} EUR</s>)"
             if v["discount_pct"]:
-                line += f" [-{v['discount_pct']:.0f}%]"
+                line += f" -{v['discount_pct']:.0f}%"
             lines.append(line)
         lines.append("")
 
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 async def cmd_historico(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -72,18 +72,18 @@ async def cmd_historico(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(f"Sin datos para {match['name']}")
         return
 
-    lines = [f"*{match['name']}* (ultimos 30 dias)\n"]
+    lines = [f"<b>{match['name']}</b> (ultimos 30 dias)\n"]
     for v in latest:
         stats = get_price_stats(conn, match["id"], v["variant"], days=30)
-        lines.append(f"  {v['variant']}:")
-        lines.append(f"    Actual: {v['price']:.2f} EUR")
+        lines.append(f"  <b>{v['variant']}:</b>")
+        lines.append(f"    Actual: <b>{v['price']:.2f} EUR</b>")
         if stats["min"] is not None:
             lines.append(f"    Min: {stats['min']:.2f} EUR")
             lines.append(f"    Max: {stats['max']:.2f} EUR")
             lines.append(f"    Media: {stats['avg']:.2f} EUR")
         lines.append("")
 
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 async def cmd_alerta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -112,10 +112,26 @@ async def cmd_productos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("No hay productos configurados.")
         return
 
-    lines = ["*Productos trackeados:*\n"]
+    lines = ["<b>Productos trackeados:</b>\n"]
     for p in products:
         lines.append(f"  - {p['name']}")
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    lines = [
+        "<b>HSN Price Tracker</b>",
+        "",
+        "Monitorizo precios de proteinas de HSN Store cada 6 horas y te aviso cuando bajan.",
+        "",
+        "<b>Comandos:</b>",
+        "/precios - Precios actuales",
+        "/historico &lt;producto&gt; - Stats ultimos 30 dias",
+        "/alerta [%] - Ver o cambiar umbral de alerta",
+        "/productos - Productos trackeados",
+        "/help - Esta ayuda",
+    ]
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 def main():
@@ -125,6 +141,8 @@ def main():
         return
 
     app = Application.builder().token(bot_token).build()
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("help", cmd_start))
     app.add_handler(CommandHandler("precios", cmd_precios))
     app.add_handler(CommandHandler("historico", cmd_historico))
     app.add_handler(CommandHandler("alerta", cmd_alerta))
