@@ -2,6 +2,7 @@ services:
   bot:
     build: .
     command: python src/bot.py
+    env_file: .env
     volumes:
       - ./data:/app/data
       - ./config.yaml:/app/config.yaml:ro
@@ -18,6 +19,7 @@ services:
         python main.py &&
         cron -f
       "
+    env_file: .env
     volumes:
       - ./data:/app/data
       - ./config.yaml:/app/config.yaml:ro

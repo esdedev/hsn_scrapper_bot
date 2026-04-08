@@ -1,13 +1,16 @@
+import os
 import pytest
 from src.config import load_config
 
 
-def test_load_config_reads_yaml(tmp_path):
+def test_load_config_reads_yaml(tmp_path, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "TEST_TOKEN")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
     cfg_file = tmp_path / "config.yaml"
     cfg_file.write_text("""
 telegram:
-  bot_token: "TEST_TOKEN"
-  chat_id: "12345"
+  bot_token: ""
+  chat_id: ""
 
 scraper:
   interval_hours: 6

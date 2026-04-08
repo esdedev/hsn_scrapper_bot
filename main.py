@@ -1,6 +1,5 @@
 # main.py
 import logging
-import sys
 from datetime import datetime, timezone
 
 from src.config import load_config
