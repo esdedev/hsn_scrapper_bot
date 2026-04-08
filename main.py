@@ -42,7 +42,8 @@ def run():
     products = config["products"]
     now = datetime.now(timezone.utc)
     all_alerts = []
-    all_prices = {}  # {product_name: [price_entries]}
+    evo_2kg_entry = None
+    products_scraped = 0
 
     for product in products:
         name = product["name"]
@@ -56,7 +57,7 @@ def run():
             logger.warning(f"No prices found for {name}")
             continue
 
-        all_prices[name] = price_data
+        products_scraped += 1
 
         for entry in price_data:
             insert_price(
@@ -69,65 +70,61 @@ def run():
                 now,
             )
 
+            # Capture Evowhey 2Kg for the summary
+            if (evo_2kg_entry is None
+                    and "evowhey" in name.lower()
+                    and "2" in entry["variant"].lower()
+                    and "kg" in entry["variant"].lower()):
+                evo_2kg_entry = entry
+
         alerts = check_alerts(conn, product_id, name, price_data, threshold, comparison_days)
         all_alerts.extend(alerts)
 
-    # Send summary for tracked variant (Evowhey 2Kg)
-    if all_prices and bot_token and chat_id:
-        summary = _build_summary(all_prices, now)
-        if summary:
-            try:
-                send_telegram_message(bot_token, chat_id, summary)
-                logger.info("Summary sent to Telegram")
-            except Exception as e:
-                logger.error(f"Failed to send summary: {e}")
+    can_send = bot_token and chat_id
+
+    # Send summary for Evowhey 2Kg
+    if evo_2kg_entry and can_send:
+        summary = _build_summary(evo_2kg_entry, now)
+        try:
+            send_telegram_message(bot_token, chat_id, summary)
+            logger.info("Summary sent to Telegram")
+        except Exception as e:
+            logger.error(f"Failed to send summary: {e}")
 
     # Send individual alerts for price drops
-    if all_alerts and bot_token and chat_id:
-        for alert in all_alerts:
-            msg = format_alert_message(alert)
+    for alert in all_alerts:
+        msg = format_alert_message(alert)
+        if can_send:
             logger.info(f"Sending alert: {alert['product_name']} ({alert['variant']})")
             try:
                 send_telegram_message(bot_token, chat_id, msg)
             except Exception as e:
                 logger.error(f"Failed to send Telegram alert: {e}")
+        else:
+            logger.warning(f"Alert triggered but Telegram not configured: "
+                           f"{alert['product_name']} ({alert['variant']})")
 
-    logger.info(f"Done. {len(all_prices)} products scraped, {len(all_alerts)} alerts sent.")
+    logger.info(f"Done. {products_scraped} products scraped, {len(all_alerts)} alerts triggered.")
     conn.close()
 
 
-def _build_summary(all_prices: dict, now: datetime) -> str | None:
-    """Build a short summary focused on Evowhey Protein 2Kg."""
+def _build_summary(entry: dict, now: datetime) -> str:
+    """Build a short summary for the Evowhey Protein 2Kg variant."""
     ts = now.strftime("%d/%m/%Y %H:%M")
-
-    # Find Evowhey 2Kg
-    evo_entry = None
-    for name, entries in all_prices.items():
-        if "evowhey" in name.lower():
-            for e in entries:
-                if "2" in e["variant"].lower() and "kg" in e["variant"].lower():
-                    evo_entry = {**e, "product_name": name}
-                    break
-        if evo_entry:
-            break
-
-    if not evo_entry:
-        return None
-
-    price = evo_entry["price"]
-    original = evo_entry.get("original_price")
-    discount = evo_entry.get("discount_pct")
+    price = entry["price"]
+    original = entry.get("original_price")
+    discount = entry.get("discount_pct")
 
     lines = [
-        f"<b>EVOWHEY PROTEIN 2Kg</b>",
-        f"",
+        "<b>EVOWHEY PROTEIN 2Kg</b>",
+        "",
         f"Precio: <b>{price:.2f} EUR</b>",
     ]
     if original:
         lines.append(f"PVPR: <s>{original:.2f} EUR</s>")
     if discount:
         lines.append(f"Descuento: <b>-{discount:.0f}%</b>")
-    lines.append(f"")
+    lines.append("")
     lines.append(f"<i>{ts}</i>")
 
     return "\n".join(lines)

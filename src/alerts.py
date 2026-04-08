@@ -29,27 +29,29 @@ def check_alerts(
                 "original_price": entry.get("original_price"),
                 "discount_pct": entry.get("discount_pct"),
                 "drop_pct": drop_pct,
-                "avg_7d": round(avg, 2),
+                "avg_price": round(avg, 2),
+                "comparison_days": comparison_days,
                 "min_historic": min_historic,
             })
     return alerts
 
 
 def format_alert_message(alert: dict) -> str:
+    days = alert.get("comparison_days", 7)
     lines = [
-        f"OFERTA DETECTADA",
-        f"",
+        "OFERTA DETECTADA",
+        "",
         f"<b>{alert['product_name']} ({alert['variant']})</b>",
-        f"",
+        "",
         f"Precio: <b>{alert['price']:.2f} EUR</b>",
     ]
     if alert.get("original_price"):
         lines.append(f"PVPR: <s>{alert['original_price']:.2f} EUR</s>")
-    lines.append(f"")
-    lines.append(f"Bajada vs media 7d: <b>-{alert['drop_pct']:.1f}%</b>")
+    lines.append("")
+    lines.append(f"Bajada vs media {days}d: <b>-{alert['drop_pct']:.1f}%</b>")
     if alert.get("discount_pct"):
         lines.append(f"Descuento HSN: -{alert['discount_pct']:.0f}%")
-    lines.append(f"Media 7 dias: {alert['avg_7d']:.2f} EUR")
+    lines.append(f"Media {days} dias: {alert['avg_price']:.2f} EUR")
     if alert.get("min_historic") is not None:
         lines.append(f"Minimo historico: {alert['min_historic']:.2f} EUR")
     return "\n".join(lines)

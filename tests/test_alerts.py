@@ -51,5 +51,5 @@ def test_alert_includes_min_and_avg(db):
     new_prices = [{"variant": "2kg", "price": 34.0, "original_price": 50.0, "discount_pct": 32.0}]
     alerts = check_alerts(db, pid, "Evowhey", new_prices, threshold_pct=7, comparison_days=7)
     assert len(alerts) == 1
-    assert alerts[0]["avg_7d"] == pytest.approx(40.0, abs=0.1)
+    assert alerts[0]["avg_price"] == pytest.approx(40.0, abs=0.1)
     assert alerts[0]["min_historic"] == 38.0
