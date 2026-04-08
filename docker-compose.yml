@@ -1,7 +1,7 @@
 services:
   bot:
     build: .
-    command: python src/bot.py
+    command: python -m src.bot
     env_file: .env
     volumes:
       - ./data:/app/data
