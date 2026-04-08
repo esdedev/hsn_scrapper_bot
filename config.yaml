@@ -1,0 +1,27 @@
+telegram:
+  bot_token: ""
+  chat_id: ""
+
+scraper:
+  interval_hours: 6
+  timeout_seconds: 30
+
+alerts:
+  default_threshold_pct: 7
+  comparison_days: 7
+
+products:
+  - name: "Evowhey Protein"
+    url: "https://www.hsnstore.com/marcas/sport-series/evowhey-protein"
+  - name: "Proteina de Soja Aislada 2.0"
+    url: "https://www.hsnstore.com/marcas/essential-series/proteina-de-soja-aislada-2-0"
+  - name: "Proteina de Guisante Aislada 2.0"
+    url: "https://www.hsnstore.com/marcas/essential-series/proteina-de-guisante-aislada-2-0"
+  # - name: "Evolate 2.0"
+  #   url: "https://www.hsnstore.com/marcas/sport-series/evolate-2-0-whey-isolate-cfm"
+  # - name: "Evopro"
+  #   url: "https://www.hsnstore.com/marcas/sport-series/evopro-mezcla-proteinas-premium-digezyme"
+  # - name: "Evohydro 2.0"
+  #   url: "https://www.hsnstore.com/marcas/sport-series/evohydro-2-0-hydro-whey"
+  # - name: "Evoexcel 2.0"
+  #   url: "https://www.hsnstore.com/marcas/sport-series/evoexcel-2-0-whey-protein-isolate-concentrate"
