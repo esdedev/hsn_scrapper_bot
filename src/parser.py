@@ -1,8 +1,9 @@
+import re
 from html.parser import HTMLParser
 
 
 def parse_price(price_text: str) -> float | None:
-    """Convert a price string like '35,90 €' to a float like 35.90."""
+    """Convert a price string like '11,76 €' or '17,90\xa0€' to a float."""
     if not price_text:
         return None
     cleaned = (
@@ -19,11 +20,27 @@ def parse_price(price_text: str) -> float | None:
         return None
 
 
-def parse_product_page(html: str) -> list[dict]:
-    """Extract price data from an HSN product page HTML string.
+def parse_discount(text: str) -> float | None:
+    """Extract discount percentage from text like '-34%'."""
+    if not text:
+        return None
+    match = re.search(r"(\d+(?:[.,]\d+)?)", text.replace(",", "."))
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+    return None
 
-    Returns a list of dicts with keys: variant, price, original_price, discount_pct.
-    For static HTML (no JS), only the currently selected variant is returned.
+
+def parse_product_page(html: str) -> list[dict]:
+    """Extract price data from HSN product page HTML (Hyva/Alpine.js theme).
+
+    HSN uses Alpine.js. Prices are in:
+    - Final price: <span class="... primary-price ...">11,76 €</span>
+    - Old price: <span class="... line-through ...">17,90 €</span>
+    - Discount: <span class="tag tag__discount ...">-34%</span>
+    - Variants: <div class="swatch-option" data-option-label="2 Kg">
     """
 
     class PriceExtractor(HTMLParser):
@@ -31,40 +48,43 @@ def parse_product_page(html: str) -> list[dict]:
             super().__init__()
             self.final_price = None
             self.old_price = None
+            self.discount_pct = None
             self.variants = []
-            self._in_price_span = False
-            self._current_price_type = None
+            self._in_primary_price = False
+            self._in_old_price = False
+            self._in_discount_tag = False
 
         def handle_starttag(self, tag, attrs):
             attrs_dict = dict(attrs)
-            if tag == "span" and attrs_dict.get("data-price-type") == "finalPrice":
-                self._current_price_type = "final"
-            elif tag == "span" and attrs_dict.get("data-price-type") == "oldPrice":
-                self._current_price_type = "old"
-            elif (
-                tag == "span"
-                and "price" in attrs_dict.get("class", "")
-                and self._current_price_type
-            ):
-                self._in_price_span = True
-            elif tag == "div" and "swatch-option" in attrs_dict.get("class", ""):
+            classes = attrs_dict.get("class", "")
+            if tag == "span" and "primary-price" in classes:
+                self._in_primary_price = True
+            elif tag == "span" and "line-through" in classes:
+                self._in_old_price = True
+            elif tag == "span" and "tag__discount" in classes:
+                self._in_discount_tag = True
+            elif tag == "div" and "swatch-option" in classes:
                 label = attrs_dict.get("data-option-label", "")
                 if label:
                     self.variants.append(label)
 
         def handle_endtag(self, tag):
-            if tag == "span" and self._in_price_span:
-                self._in_price_span = False
-                self._current_price_type = None
+            if tag == "span":
+                self._in_primary_price = False
+                self._in_old_price = False
+                self._in_discount_tag = False
 
         def handle_data(self, data):
-            if self._in_price_span:
+            if self._in_primary_price and self.final_price is None:
                 price = parse_price(data)
                 if price is not None:
-                    if self._current_price_type == "final":
-                        self.final_price = price
-                    elif self._current_price_type == "old":
-                        self.old_price = price
+                    self.final_price = price
+            elif self._in_old_price and self.old_price is None:
+                price = parse_price(data)
+                if price is not None:
+                    self.old_price = price
+            elif self._in_discount_tag and self.discount_pct is None:
+                self.discount_pct = parse_discount(data)
 
     extractor = PriceExtractor()
     extractor.feed(html)
@@ -76,8 +96,8 @@ def parse_product_page(html: str) -> list[dict]:
 
     results = []
     if extractor.final_price is not None:
-        discount = None
-        if extractor.old_price and extractor.old_price > 0:
+        discount = extractor.discount_pct
+        if discount is None and extractor.old_price and extractor.old_price > 0:
             discount = round(
                 (1 - extractor.final_price / extractor.old_price) * 100, 1
             )
