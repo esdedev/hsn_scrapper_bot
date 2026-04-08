@@ -36,15 +36,20 @@ def check_alerts(
 
 
 def format_alert_message(alert: dict) -> str:
-    msg = f"Oferta detectada!\n"
-    msg += f"{alert['product_name']} ({alert['variant']})\n"
-    msg += f"Precio: {alert['price']:.2f} EUR"
+    lines = [
+        f"OFERTA DETECTADA",
+        f"",
+        f"<b>{alert['product_name']} ({alert['variant']})</b>",
+        f"",
+        f"Precio: <b>{alert['price']:.2f} EUR</b>",
+    ]
     if alert.get("original_price"):
-        msg += f" (antes {alert['original_price']:.2f} EUR)"
-    msg += f"\nBajada vs media 7d: -{alert['drop_pct']:.1f}%"
+        lines.append(f"PVPR: <s>{alert['original_price']:.2f} EUR</s>")
+    lines.append(f"")
+    lines.append(f"Bajada vs media 7d: <b>-{alert['drop_pct']:.1f}%</b>")
     if alert.get("discount_pct"):
-        msg += f"\nDescuento HSN: -{alert['discount_pct']:.1f}%"
-    msg += f"\nMedia 7 dias: {alert['avg_7d']:.2f} EUR"
+        lines.append(f"Descuento HSN: -{alert['discount_pct']:.0f}%")
+    lines.append(f"Media 7 dias: {alert['avg_7d']:.2f} EUR")
     if alert.get("min_historic") is not None:
-        msg += f"\nMinimo historico: {alert['min_historic']:.2f} EUR"
-    return msg
+        lines.append(f"Minimo historico: {alert['min_historic']:.2f} EUR")
+    return "\n".join(lines)

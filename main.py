@@ -15,13 +15,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def send_telegram_message(bot_token: str, chat_id: str, text: str) -> None:
+def send_telegram_message(bot_token: str, chat_id: str, text: str, parse_mode: str = "HTML") -> None:
     from telegram import Bot
     import asyncio
 
     async def _send():
         bot = Bot(token=bot_token)
-        await bot.send_message(chat_id=chat_id, text=text)
+        await bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode)
 
     asyncio.run(_send())
 
@@ -72,14 +72,15 @@ def run():
         alerts = check_alerts(conn, product_id, name, price_data, threshold, comparison_days)
         all_alerts.extend(alerts)
 
-    # Always send a price summary
+    # Send summary for tracked variant (Evowhey 2Kg)
     if all_prices and bot_token and chat_id:
         summary = _build_summary(all_prices, now)
-        try:
-            send_telegram_message(bot_token, chat_id, summary)
-            logger.info("Summary sent to Telegram")
-        except Exception as e:
-            logger.error(f"Failed to send summary: {e}")
+        if summary:
+            try:
+                send_telegram_message(bot_token, chat_id, summary)
+                logger.info("Summary sent to Telegram")
+            except Exception as e:
+                logger.error(f"Failed to send summary: {e}")
 
     # Send individual alerts for price drops
     if all_alerts and bot_token and chat_id:
@@ -95,19 +96,40 @@ def run():
     conn.close()
 
 
-def _build_summary(all_prices: dict, now: datetime) -> str:
-    ts = now.strftime("%d/%m/%Y %H:%M UTC")
-    lines = [f"Precios HSN ({ts})\n"]
+def _build_summary(all_prices: dict, now: datetime) -> str | None:
+    """Build a short summary focused on Evowhey Protein 2Kg."""
+    ts = now.strftime("%d/%m/%Y %H:%M")
+
+    # Find Evowhey 2Kg
+    evo_entry = None
     for name, entries in all_prices.items():
-        lines.append(name)
-        for e in entries:
-            line = f"  {e['variant']}: {e['price']:.2f} EUR"
-            if e.get("original_price"):
-                line += f" (PVPR {e['original_price']:.2f} EUR)"
-            if e.get("discount_pct"):
-                line += f" -{e['discount_pct']:.0f}%"
-            lines.append(line)
-        lines.append("")
+        if "evowhey" in name.lower():
+            for e in entries:
+                if "2" in e["variant"].lower() and "kg" in e["variant"].lower():
+                    evo_entry = {**e, "product_name": name}
+                    break
+        if evo_entry:
+            break
+
+    if not evo_entry:
+        return None
+
+    price = evo_entry["price"]
+    original = evo_entry.get("original_price")
+    discount = evo_entry.get("discount_pct")
+
+    lines = [
+        f"<b>EVOWHEY PROTEIN 2Kg</b>",
+        f"",
+        f"Precio: <b>{price:.2f} EUR</b>",
+    ]
+    if original:
+        lines.append(f"PVPR: <s>{original:.2f} EUR</s>")
+    if discount:
+        lines.append(f"Descuento: <b>-{discount:.0f}%</b>")
+    lines.append(f"")
+    lines.append(f"<i>{ts}</i>")
+
     return "\n".join(lines)
 
 
