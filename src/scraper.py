@@ -7,14 +7,11 @@ logger = logging.getLogger(__name__)
 
 
 def scrape_product(url: str, timeout_ms: int = 30000) -> list[dict]:
-    """Scrape the current price from an HSN product page.
+    """Scrape all size-variant prices from an HSN product page.
 
-    HSN uses Alpine.js (Hyva theme). The actual product price is in a
-    .price-box that contains a .tag__discount element (distinguishing it
-    from per-serving/per-100g price boxes). Prices are rendered by Alpine.js
-    so we read innerText of visible elements, not data attributes.
-
-    Returns one result per product (the currently selected size/flavor).
+    HSN uses Alpine.js (Hyva theme). Size variants are <label> elements
+    inside .weight-options. Clicking each one updates the main price.
+    We click each size, wait for price update, and read the result.
     """
     results = []
 
@@ -25,14 +22,44 @@ def scrape_product(url: str, timeout_ms: int = 30000) -> list[dict]:
             page.goto(url, wait_until="networkidle", timeout=timeout_ms)
             page.wait_for_timeout(2000)
 
-            result = _read_main_price(page)
-            if result:
-                results.append(result)
-                logger.info(f"  {result['variant']}: {result['price']}€ "
-                            f"(was {result.get('original_price')}€, "
-                            f"-{result.get('discount_pct')}%)")
-            else:
-                logger.warning("  Could not extract price")
+            # Get list of size variant labels
+            size_labels = page.evaluate("""() => {
+                const main = document.querySelector('.product-info-main') || document;
+                const container = main.querySelector('.weight-options');
+                if (!container) return [];
+                const labels = [];
+                for (const label of container.querySelectorAll('label')) {
+                    const text = label.innerText.trim();
+                    if (text) labels.push(text);
+                }
+                return labels;
+            }""")
+
+            if not size_labels:
+                # No size variants — read the single price
+                result = _read_main_price(page)
+                if result:
+                    result["variant"] = "default"
+                    results.append(result)
+                    logger.info(f"  default: {result['price']}€")
+                return results
+
+            logger.info(f"  Found {len(size_labels)} sizes: {size_labels}")
+
+            # Click each size label and read the updated price
+            label_els = page.query_selector_all(".weight-options label")
+            for i, label_el in enumerate(label_els):
+                size_name = size_labels[i] if i < len(size_labels) else f"size_{i}"
+                label_el.click()
+                page.wait_for_timeout(1000)
+
+                result = _read_main_price(page)
+                if result:
+                    result["variant"] = size_name
+                    results.append(result)
+                    logger.info(f"  {size_name}: {result['price']}€ "
+                                f"(was {result.get('original_price')}€, "
+                                f"-{result.get('discount_pct')}%)")
 
         except Exception as e:
             logger.error(f"Error scraping {url}: {e}")
@@ -105,35 +132,7 @@ def _read_main_price(page) -> dict | None:
         const discountEl = priceBox.querySelector('.tag__discount');
         if (discountEl) discountText = discountEl.innerText.trim();
 
-        // Detect currently selected size/format
-        // Look for format info in product options or title
-        let variant = 'default';
-
-        // Check super_attribute selects for a size-like selected option
-        for (const s of main.querySelectorAll('select[name^="super_attribute"]')) {
-            const selected = s.options[s.selectedIndex];
-            if (selected && selected.value) {
-                // Check if any option text mentions weight
-                const hasWeightOpts = Array.from(s.options).some(
-                    o => /\\d+\\s*(g|kg)/i.test(o.text)
-                );
-                if (hasWeightOpts && /\\d+\\s*(g|kg)/i.test(selected.text)) {
-                    variant = selected.text.trim();
-                    break;
-                }
-            }
-        }
-
-        // Fallback: extract weight from product title
-        if (variant === 'default') {
-            const h1 = main.querySelector('h1');
-            if (h1) {
-                const match = h1.textContent.match(/(\\d+\\s*(g|kg|Kg))/i);
-                if (match) variant = match[1];
-            }
-        }
-
-        return { finalPriceText, oldPriceText, discountText, variant };
+        return { finalPriceText, oldPriceText, discountText };
     }""")
 
     if not data or not data["finalPriceText"]:
@@ -150,7 +149,6 @@ def _read_main_price(page) -> dict | None:
         discount = round((1 - final_price / old_price) * 100, 1)
 
     return {
-        "variant": data.get("variant", "default"),
         "price": final_price,
         "original_price": old_price,
         "discount_pct": discount,
