@@ -119,6 +119,16 @@ async def cmd_productos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
+async def post_init(application: Application) -> None:
+    await application.bot.set_my_commands([
+        ("precios", "Precios actuales"),
+        ("historico", "Stats ultimos 30 dias"),
+        ("alerta", "Ver o cambiar umbral de alerta"),
+        ("productos", "Productos trackeados"),
+        ("help", "Ayuda"),
+    ])
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     lines = [
         "<b>HSN Price Tracker</b>",
@@ -141,7 +151,7 @@ def main():
         logger.error("bot_token not configured in config.yaml")
         return
 
-    app = Application.builder().token(bot_token).build()
+    app = Application.builder().token(bot_token).post_init(post_init).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_start))
     app.add_handler(CommandHandler("precios", cmd_precios))
